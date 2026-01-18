@@ -6,6 +6,7 @@ node_modules
 out/
 dist/
 build/
+next-env.d.ts
 
 # debug
 npm-debug.log*
