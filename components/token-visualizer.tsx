@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { encoding_for_model, Tiktoken } from "@dqbd/tiktoken";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,6 +43,14 @@ export function TokenVisualizer() {
   const [encodingName, setEncodingName] = useState<string>("o200k_base");
 
   const tiktokenRef = useRef<Tiktoken | null>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const rowVirtualizer = useVirtualizer({
+    count: tokens.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 35,
+    overscan: 5,
+  });
 
   useEffect(() => {
     try {
@@ -239,25 +248,54 @@ export function TokenVisualizer() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex flex-wrap gap-2 p-2 rounded-lg bg-muted/30 max-h-[100px] overflow-y-auto">
-                    {tokens.map((token, index) => (
-                      <button
-                        key={`${token.id}-${index}`}
-                        onClick={() => setSelectedToken(token)}
-                        className={`token-chip group ${selectedToken?.id === token.id ? 'ring-2 ring-ring' : ''}`}
-                        style={{
-                          backgroundColor: token.color,
-                          borderColor: token.borderColor,
-                          color: getTokenTextColor(),
-                        }}
-                        title={`ID: ${token.id}`}
-                      >
-                        <span className="token-id">{token.id}</span>
-                        <span className="token-content">
-                          {token.text === "\n" ? "\\n" : token.text}
-                        </span>
-                      </button>
-                    ))}
+                <div
+                    ref={parentRef}
+                    className="flex flex-wrap gap-2 p-2 rounded-lg bg-muted/30 max-h-[200px] overflow-y-auto"
+                  >
+                    <div
+                      style={{
+                        height: `${rowVirtualizer.getTotalSize()}px`,
+                        width: "100%",
+                        position: "relative",
+                      }}
+                    >
+                      {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+                        const token = tokens[virtualItem.index];
+                        return (
+                          <div
+                            key={virtualItem.key}
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              width: "100%",
+                              height: `${virtualItem.size}px`,
+                              transform: `translateY(${virtualItem.start}px)`,
+                              display: "flex",
+                              alignItems: "center",
+                            }}
+                          >
+                            <button
+                              onClick={() => setSelectedToken(token)}
+                              className={`token-chip group ${
+                                selectedToken?.id === token.id ? "ring-2 ring-ring" : ""
+                              }`}
+                              style={{
+                                backgroundColor: token.color,
+                                borderColor: token.borderColor,
+                                color: getTokenTextColor(),
+                              }}
+                              title={`ID: ${token.id}`}
+                            >
+                              <span className="token-id">{token.id}</span>
+                              <span className="token-content">
+                                {token.text === "\n" ? "\\n" : token.text}
+                              </span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
