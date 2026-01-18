@@ -9,7 +9,6 @@
     "start": "next start",
     "lint": "next lint"
   },
-  "packageManager": "pnpm@10.28.0",
   "dependencies": {
     "@dqbd/tiktoken": "^1.0.22",
     "@radix-ui/react-popover": "^1.1.15",
