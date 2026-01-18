@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { encoding_for_model } from "@dqbd/tiktoken";
+import { encoding_for_model, Tiktoken } from "@dqbd/tiktoken";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ModelSelector } from "@/components/model-selector";
 import { getTokenColor, getTokenBorderColor, getTokenTextColor } from "@/lib/utils";
+import { useDebounce } from "@/lib/hooks";
 import { Copy, Trash2, Sparkles, Info, FileCode } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,6 +33,7 @@ const EXAMPLES = [
 
 export function TokenVisualizer() {
   const [text, setText] = useState("Hello, world!");
+  const debouncedText = useDebounce(text, 500);
   const [model, setModel] = useState("gpt-4o");
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
   const [tokenCount, setTokenCount] = useState(0);
@@ -39,28 +41,28 @@ export function TokenVisualizer() {
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
   const [encodingName, setEncodingName] = useState<string>("o200k_base");
 
-  // Ref for tokenizer instance
-  const tiktokenRef = useRef<ReturnType<typeof encoding_for_model> | null>(null);
+  const tiktokenRef = useRef<Tiktoken | null>(null);
 
-  // Initialize tiktoken for the model
-  const initTiktoken = useCallback(() => {
-    if (tiktokenRef.current) {
-      tiktokenRef.current.free();
+  useEffect(() => {
+    try {
+      if (tiktokenRef.current) {
+        tiktokenRef.current.free();
+      }
+      const enc = encoding_for_model(model as any);
+      tiktokenRef.current = enc;
+      setEncodingName(enc.name || model);
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to load tokenizer for this model.");
     }
-    const enc = encoding_for_model(model as any);
-    tiktokenRef.current = enc;
-    setEncodingName(enc.name || model);
-    return enc;
   }, [model]);
 
-  // Handle model change
   useEffect(() => {
-    setTokens([]);
-    setSelectedToken(null);
+    if (!tiktokenRef.current) return;
 
-    const enc = initTiktoken();
-    if (text) {
-      const tokenIds = enc.encode(text);
+    const enc = tiktokenRef.current;
+    if (debouncedText) {
+      const tokenIds = enc.encode(debouncedText);
       const newTokens: TokenInfo[] = [];
       for (let i = 0; i < tokenIds.length; i++) {
         const id = tokenIds[i];
@@ -75,9 +77,13 @@ export function TokenVisualizer() {
       }
       setTokens(newTokens);
       setTokenCount(tokenIds.length);
-      setCharCount(text.length);
+      setCharCount(debouncedText.length);
+    } else {
+      setTokens([]);
+      setTokenCount(0);
+      setCharCount(0);
     }
-  }, [model, initTiktoken, text]);
+  }, [debouncedText, model]);
 
   // Auto-select first token when tokens change
   useEffect(() => {
@@ -90,10 +96,6 @@ export function TokenVisualizer() {
 
   const handleClear = () => {
     setText("");
-    setTokens([]);
-    setTokenCount(0);
-    setCharCount(0);
-    setSelectedToken(null);
   };
 
   const handleExample = (example: string) => {
