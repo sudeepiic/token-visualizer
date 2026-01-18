@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import { encoding_for_model, Tiktoken } from "@dqbd/tiktoken";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import Editor from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -78,7 +78,7 @@ TokenCell.displayName = "TokenCell";
 
 export function TokenVisualizer() {
   const [text, setText] = useState("Hello, world!");
-  const debouncedText = useDebounce(text, 500);
+  const debouncedText = useDebounce(text, 1000);
   const [model, setModel] = useState("gpt-4o");
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
   const [tokenCount, setTokenCount] = useState(0);
@@ -90,6 +90,17 @@ export function TokenVisualizer() {
 
   const tiktokenRef = useRef<Tiktoken | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
+
+  const handleBeforeMount = (monaco: any) => {
+    monaco.editor.defineTheme("app-dark", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [],
+      colors: {
+        "editor.background": "#13141c", // Matches app background
+      },
+    });
+  };
 
   const rowCount = Math.ceil(tokens.length / gridColumns);
 
@@ -239,17 +250,39 @@ export function TokenVisualizer() {
                   <ModelSelector value={model} onChange={setModel} />
                 </div>
   
-                <div className="space-y-2">
-                  <Label htmlFor="text-input">Text</Label>
-                  <Textarea
-                    id="text-input"
-                    placeholder="Enter your text here..."
+              <div className="space-y-2">
+                <Label htmlFor="text-input">Text</Label>
+                <div className="border rounded-xl overflow-hidden min-h-[120px] bg-[#13141c] p-4">
+                  <Editor
+                    height="300px"
+                    defaultLanguage="markdown"
+                    theme="app-dark"
                     value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    className="min-h-[120px] font-mono"
+                    onChange={(value) => setText(value || "")}
+                    beforeMount={handleBeforeMount}
+                    options={{
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      fontSize: 14,
+                      wordWrap: "on",
+                      lineNumbers: "off",
+                      folding: false,
+                      glyphMargin: false,
+                      renderLineHighlight: "none",
+                      selectionHighlight: false,
+                      multiCursorModifier: "ctrlCmd",
+                      occurrencesHighlight: "off",
+                      hideCursorInOverviewRuler: true,
+                      overviewRulerLanes: 0,
+                      fixedOverflowWidgets: true,
+                      fastScrollSensitivity: 2,
+                      padding: { top: 8, bottom: 8 },
+                      lineDecorationsWidth: 0,
+                      lineNumbersMinChars: 0,
+                    }}
                   />
                 </div>
-  
+              </div>
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={handleClear} variant="outline" size="sm">
                     <Trash2 className="w-4 h-4 mr-2" />

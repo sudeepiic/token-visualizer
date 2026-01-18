@@ -43,7 +43,7 @@ const providerColors: Record<string, string> = {
   "OpenAI": "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
 };
 
-export function ModelSelector({ value, onChange, isLoading }: ModelSelectorProps) {
+function ModelSelectorBase({ value, onChange, isLoading }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -146,3 +146,5 @@ export function ModelSelector({ value, onChange, isLoading }: ModelSelectorProps
     </Popover>
   );
 }
+
+export const ModelSelector = React.memo(ModelSelectorBase);
