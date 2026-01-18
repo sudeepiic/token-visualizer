@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+  /* Custom design tokens for shadcn/ui compatibility */
+  --color-background: white;
+  --color-foreground: oklch(0.084 0.004 264.66);
+  --color-card: white;
+  --color-card-foreground: oklch(0.084 0.004 264.66);
+  --color-popover: white;
+  --color-popover-foreground: oklch(0.084 0.004 264.66);
+  --color-primary: oklch(0.533 0.228 264.66);
+  --color-primary-foreground: oklch(0.98 0.004 264.66);
+  --color-secondary: oklch(0.961 0.013 264.66);
+  --color-secondary-foreground: oklch(0.224 0.047 264.66);
+  --color-muted: oklch(0.961 0.013 264.66);
+  --color-muted-foreground: oklch(0.469 0.016 264.66);
+  --color-accent: oklch(0.961 0.013 264.66);
+  --color-accent-foreground: oklch(0.224 0.047 264.66);
+  --color-destructive: oklch(0.602 0.221 27.66);
+  --color-destructive-foreground: oklch(0.98 0.004 264.66);
+  --color-border: oklch(0.914 0.032 264.66);
+  --color-input: oklch(0.914 0.032 264.66);
+  --color-ring: oklch(0.533 0.228 264.66);
+  --radius-lg: 0.5rem;
+  --radius-md: calc(0.5rem - 2px);
+  --radius-sm: calc(0.5rem - 4px);
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-background: oklch(0.084 0.004 264.66);
+    --color-foreground: oklch(0.98 0.004 264.66);
+    --color-card: oklch(0.084 0.004 264.66);
+    --color-card-foreground: oklch(0.98 0.004 264.66);
+    --color-popover: oklch(0.084 0.004 264.66);
+    --color-popover-foreground: oklch(0.98 0.004 264.66);
+    --color-primary: oklch(0.598 0.238 264.66);
+    --color-primary-foreground: oklch(0.224 0.047 264.66);
+    --color-secondary: oklch(0.175 0.033 264.66);
+    --color-secondary-foreground: oklch(0.98 0.004 264.66);
+    --color-muted: oklch(0.175 0.033 264.66);
+    --color-muted-foreground: oklch(0.651 0.202 264.66);
+    --color-accent: oklch(0.175 0.033 264.66);
+    --color-accent-foreground: oklch(0.98 0.004 264.66);
+    --color-destructive: oklch(0.306 0.079 27.66);
+    --color-destructive-foreground: oklch(0.98 0.004 264.66);
+    --color-border: oklch(0.175 0.033 264.66);
+    --color-input: oklch(0.175 0.033 264.66);
+    --color-ring: oklch(0.763 0.156 264.66);
+  }
+}
+
+/* Token display styles using utility classes */
+.token-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-md);
+  border: 1px solid;
+  transition: all 0.2s;
+}
+
+.token-chip:hover {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  transform: scale(1.05);
+}
+
+.token-id {
+  font-size: 0.75rem;
+  font-family: ui-monospace, monospace;
+  opacity: 0.5;
+}
+
+.token-content {
+  font-family: ui-monospace, monospace;
+  font-size: 0.875rem;
+}
