@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ModelSelector } from "@/components/model-selector";
 import { getTokenColor, getTokenBorderColor, getTokenTextColor, formatNumber } from "@/lib/utils";
 import { useDebounce } from "@/lib/hooks";
-import { Copy, Trash2, Sparkles, Info, FileCode, Loader2 } from "lucide-react";
+import { Copy, Trash2, Sparkles, Info, FileCode, Loader2, Github } from "lucide-react";
 import { toast } from "sonner";
 
 interface TokenInfo {
@@ -236,9 +236,20 @@ export function TokenVisualizer() {
                 See how OpenAI tokenizers process your text
               </p>
             </div>
-            <Badge variant="outline" className="text-xs ml-auto">
-              {encodingName}
-            </Badge>
+            <div className="flex items-center gap-2 ml-auto">
+              <Badge variant="outline" className="text-xs">
+                {encodingName}
+              </Badge>
+              <a 
+                href="https://github.com/sapeol/token-visualizer" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground active:scale-95 h-9 w-9 text-muted-foreground hover:text-foreground"
+                title="View on GitHub"
+              >
+                <Github className="w-5 h-5" />
+              </a>
+            </div>
           </div>
   
         {/* Main content area - side by side on larger screens */}
