@@ -72,7 +72,7 @@ export function TokenVisualizer() {
         for (const entry of entries) {
           const width = entry.contentRect.width;
           if (width > 0) {
-            const newColumns = Math.max(1, Math.floor(width / TOKEN_MIN_WIDTH));
+            const newColumns = Math.max(1, Math.floor(width / TOKEN_MIN_WIDTH) - 4);
             setGridColumns(newColumns);
             setColumnWidth(width / newColumns);
           }
