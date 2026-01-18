@@ -83,6 +83,7 @@ export function TokenVisualizer() {
   const [gridColumns, setGridColumns] = useState(1);
   const [columnWidth, setColumnWidth] = useState(TOKEN_MIN_WIDTH);
   const [isTokenizing, setIsTokenizing] = useState(false);
+  const [workerReady, setWorkerReady] = useState(false);
 
   const workerRef = useRef<Worker | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
@@ -132,22 +133,34 @@ export function TokenVisualizer() {
   }, [tokens.length > 0]);
 
   useEffect(() => {
-    workerRef.current = new Worker(new URL('../workers/tokenizer.worker.ts', import.meta.url));
-    
-    workerRef.current.onmessage = (event) => {
-      const { status, tokens, tokenCount, charCount, encodingName, error } = event.data;
-      if (status === 'complete') {
-        setTokens(tokens);
-        setTokenCount(tokenCount);
-        setCharCount(charCount);
-        setEncodingName(encodingName || model);
+    try {
+      workerRef.current = new Worker(new URL('../workers/tokenizer.worker.ts', import.meta.url));
+      
+          workerRef.current.onmessage = (event) => {
+            const { status, tokens, tokenCount, charCount, encodingName, error } = event.data;
+            if (status === 'ready') {
+              setWorkerReady(true);
+            } else if (status === 'complete') {
+              setTokens(tokens);
+              setTokenCount(tokenCount);
+              setCharCount(charCount);
+              setEncodingName(encodingName || model);
+              setIsTokenizing(false);
+            } else if (status === 'error') {
+              console.error("Worker error message:", error);
+              toast.error("Tokenization failed");
+              setIsTokenizing(false);
+            }
+          };
+      
+          workerRef.current.onerror = (error) => {        console.error("Worker startup error:", error);
+        toast.error("Worker failed to start");
         setIsTokenizing(false);
-      } else if (status === 'error') {
-        console.error("Worker error:", error);
-        toast.error("Tokenization failed");
-        setIsTokenizing(false);
-      }
-    };
+      };
+    } catch (e) {
+      console.error("Failed to create worker:", e);
+      setIsTokenizing(false);
+    }
 
     return () => {
       workerRef.current?.terminate();
@@ -155,6 +168,8 @@ export function TokenVisualizer() {
   }, []);
 
   useEffect(() => {
+    if (!workerReady) return;
+
     if (debouncedText) {
       setIsTokenizing(true);
       workerRef.current?.postMessage({ text: debouncedText, model });
@@ -164,7 +179,7 @@ export function TokenVisualizer() {
       setCharCount(0);
       setIsTokenizing(false);
     }
-  }, [debouncedText, model]);
+  }, [debouncedText, model, workerReady]);
   
     // Auto-select first token when tokens change
     useEffect(() => {

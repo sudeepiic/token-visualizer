@@ -24,6 +24,9 @@ function getTokenBorderColor(index: number): string {
   return TOKEN_COLORS[index % TOKEN_COLORS.length].border;
 }
 
+// Signal that the worker is ready
+self.postMessage({ status: 'ready' });
+
 self.onmessage = (e: MessageEvent) => {
   const { text, model } = e.data;
 
