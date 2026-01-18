@@ -19,7 +19,12 @@
       "Bash(gh repo clone:*)",
       "Bash(gh auth switch:*)",
       "Bash(pnpm install:*)",
-      "Bash(pnpm run build:*)"
+      "Bash(pnpm run build:*)",
+      "Bash(gh auth token:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(git remote remove:*)",
+      "Bash(git remote add:*)",
+      "Bash(gh auth status:*)"
     ]
   }
 }
