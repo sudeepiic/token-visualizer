@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
-import { encoding_for_model, Tiktoken } from "@dqbd/tiktoken";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import Editor from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
@@ -12,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ModelSelector } from "@/components/model-selector";
 import { getTokenColor, getTokenBorderColor, getTokenTextColor } from "@/lib/utils";
 import { useDebounce } from "@/lib/hooks";
-import { Copy, Trash2, Sparkles, Info, FileCode } from "lucide-react";
+import { Copy, Trash2, Sparkles, Info, FileCode, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface TokenInfo {
@@ -26,10 +25,6 @@ const EXAMPLES = [
   "Hello, world! This is a token visualizer.",
   "The quick brown fox jumps over the lazy dog.",
   "function fibonacci(n) { return n <= 1 ? n : fibonacci(n - 1) + fibonacci(n - 2); }",
-  "🚀 Rocket ships are amazing! 🌟✨",
-  "Tokenization splits text into smaller pieces called tokens.",
-  "SELECT * FROM users WHERE email = 'example@example.com';",
-  "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
 ];
 
 const TOKEN_MIN_WIDTH = 80;
@@ -57,7 +52,7 @@ const TokenCell = React.memo(({
   >
     <button
       onClick={() => onClick(token)}
-      className={`token-chip group w-full h-full ${
+      className={`token-chip group w-full h-full overflow-hidden ${
         isSelected ? "ring-2 ring-ring" : ""
       }`}
       style={{
@@ -67,8 +62,8 @@ const TokenCell = React.memo(({
       }}
       title={`ID: ${token.id}`}
     >
-      <span className="token-id">{token.id}</span>
-      <span className="token-content">
+      <span className="token-id shrink-0">{token.id}</span>
+      <span className="token-content min-w-0 overflow-x-auto whitespace-nowrap scrollbar-hide">
         {token.text === "\n" ? "\\n" : token.text}
       </span>
     </button>
@@ -87,8 +82,9 @@ export function TokenVisualizer() {
   const [encodingName, setEncodingName] = useState<string>("o200k_base");
   const [gridColumns, setGridColumns] = useState(1);
   const [columnWidth, setColumnWidth] = useState(TOKEN_MIN_WIDTH);
+  const [isTokenizing, setIsTokenizing] = useState(false);
 
-  const tiktokenRef = useRef<Tiktoken | null>(null);
+  const workerRef = useRef<Worker | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
 
   const handleBeforeMount = (monaco: any) => {
@@ -133,48 +129,42 @@ export function TokenVisualizer() {
       resizeObserver.observe(parentRef.current);
       return () => resizeObserver.disconnect();
     }
-  }, [tokens.length > 0]);  
-    useEffect(() => {
-      try {
-        if (tiktokenRef.current) {
-          tiktokenRef.current.free();
-        }
-        const enc = encoding_for_model(model as any);
-        tiktokenRef.current = enc;
-        setEncodingName(enc.name || model);
-      } catch (e) {
-        console.error(e);
-        toast.error("Failed to load tokenizer for this model.");
+  }, [tokens.length > 0]);
+
+  useEffect(() => {
+    workerRef.current = new Worker(new URL('../workers/tokenizer.worker.ts', import.meta.url));
+    
+    workerRef.current.onmessage = (event) => {
+      const { status, tokens, tokenCount, charCount, encodingName, error } = event.data;
+      if (status === 'complete') {
+        setTokens(tokens);
+        setTokenCount(tokenCount);
+        setCharCount(charCount);
+        setEncodingName(encodingName || model);
+        setIsTokenizing(false);
+      } else if (status === 'error') {
+        console.error("Worker error:", error);
+        toast.error("Tokenization failed");
+        setIsTokenizing(false);
       }
-    }, [model]);
-  
-    useEffect(() => {
-      if (!tiktokenRef.current) return;
-  
-      const enc = tiktokenRef.current;
-      if (debouncedText) {
-        const tokenIds = enc.encode(debouncedText);
-        const newTokens: TokenInfo[] = [];
-        for (let i = 0; i < tokenIds.length; i++) {
-          const id = tokenIds[i];
-          const decodedBytes = enc.decode_single_token_bytes(id);
-          const decodedText = new TextDecoder("utf-8").decode(decodedBytes);
-          newTokens.push({
-            id,
-            text: decodedText,
-            color: getTokenColor(i),
-            borderColor: getTokenBorderColor(i),
-          });
-        }
-        setTokens(newTokens);
-        setTokenCount(tokenIds.length);
-        setCharCount(debouncedText.length);
-      } else {
-        setTokens([]);
-        setTokenCount(0);
-        setCharCount(0);
-      }
-    }, [debouncedText, model]);
+    };
+
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (debouncedText) {
+      setIsTokenizing(true);
+      workerRef.current?.postMessage({ text: debouncedText, model });
+    } else {
+      setTokens([]);
+      setTokenCount(0);
+      setCharCount(0);
+      setIsTokenizing(false);
+    }
+  }, [debouncedText, model]);
   
     // Auto-select first token when tokens change
     useEffect(() => {
@@ -231,11 +221,12 @@ export function TokenVisualizer() {
             </Badge>
           </div>
   
-          {/* Main content area - side by side on larger screens */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            {/* Left Column - Input */}
-            <Card className="lg:sticky lg:top-6">
-              <CardHeader>
+        {/* Main content area - side by side on larger screens */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+          {/* Left Column - Input */}
+          <Card className="lg:sticky lg:top-6 flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2">
                   <Sparkles className="w-5 h-5" />
                   Input Text
@@ -243,12 +234,17 @@ export function TokenVisualizer() {
                 <CardDescription>
                   Type or paste text to see how it gets tokenized
                 </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="model">Model</Label>
-                  <ModelSelector value={model} onChange={setModel} />
-                </div>
+              </div>
+              <Button onClick={handleClear} variant="outline" size="sm" className="h-8">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Clear
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4 flex-1">
+              <div className="space-y-2">
+                <Label htmlFor="model">Model</Label>
+                <ModelSelector value={model} onChange={setModel} />
+              </div>
   
               <div className="space-y-2">
                 <Label htmlFor="text-input">Text</Label>
@@ -283,51 +279,35 @@ export function TokenVisualizer() {
                   />
                 </div>
               </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={handleClear} variant="outline" size="sm">
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Clear
-                  </Button>
-                  {EXAMPLES.map((example, index) => (
-                    <Button
-                      key={index}
-                      onClick={() => handleExample(example)}
-                      variant="ghost"
-                      size="sm"
-                    >
-                      Example {index + 1}
-                    </Button>
-                  ))}
-                </div>
-  
+
                 {/* Stats */}
-                <div className="flex flex-wrap gap-4 pt-4 border-t">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-base px-3 py-1">
-                      {tokenCount} tokens
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Tokens</span>
+                    <Badge variant="secondary" className="text-base px-3 py-1 justify-center">
+                      {tokenCount}
                     </Badge>
-                    <span className="text-sm text-muted-foreground">Token count</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-base px-3 py-1">
-                      {charCount} chars
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Characters</span>
+                    <Badge variant="secondary" className="text-base px-3 py-1 justify-center">
+                      {charCount}
                     </Badge>
-                    <span className="text-sm text-muted-foreground">Character count</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-base px-3 py-1">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Avg Chars/Token</span>
+                    <Badge variant="secondary" className="text-base px-3 py-1 justify-center">
                       {tokenCount > 0 ? (charCount / tokenCount).toFixed(1) : "0"}
                     </Badge>
-                    <span className="text-sm text-muted-foreground">Avg chars/token</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
   
             {/* Right Column - Tokens */}
-            <div className="space-y-6">
-              {tokens.length > 0 && (
-                <Card>
+            <div className="flex flex-col gap-6 h-full">
+              {(tokens.length > 0 || isTokenizing) && (
+                <Card className="flex-1 flex flex-col min-h-[300px]">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div>
@@ -340,83 +320,89 @@ export function TokenVisualizer() {
                         </CardDescription>
                       </div>
                       <div className="flex gap-2">
-                        <Button onClick={handleCopyTokens} variant="outline" size="sm">
+                        <Button onClick={handleCopyTokens} variant="outline" size="sm" disabled={isTokenizing}>
                           <Copy className="w-4 h-4 mr-2" />
                           Copy Text
                         </Button>
-                        <Button onClick={handleCopyTokenIds} variant="outline" size="sm">
+                        <Button onClick={handleCopyTokenIds} variant="outline" size="sm" disabled={isTokenizing}>
                           <Copy className="w-4 h-4 mr-2" />
                           Copy IDs
                         </Button>
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div
-                      ref={parentRef}
-                      className="p-2 rounded-lg bg-muted/30 max-h-[200px] overflow-y-auto"
-                    >
-                      <div
-                        style={{
-                          height: `${rowVirtualizer.getTotalSize()}px`,
-                          width: `${columnVirtualizer.getTotalSize()}px`,
-                          position: "relative",
-                        }}
-                      >
-                        {rowVirtualizer.getVirtualItems().map((virtualRow) => (
-                          <React.Fragment key={virtualRow.key}>
-                            {columnVirtualizer.getVirtualItems().map((virtualColumn) => {
-                              const index = virtualRow.index * gridColumns + virtualColumn.index;
-                              const token = tokens[index];
-  
-                              if (!token) return null;
-  
-                              return (
-                                <TokenCell
-                                  key={`${virtualRow.key}-${virtualColumn.key}`}
-                                  token={token}
-                                  isSelected={selectedToken?.id === token.id}
-                                  onClick={setSelectedToken}
-                                  style={{
-                                    position: "absolute",
-                                    top: 0,
-                                    left: 0,
-                                    width: `${virtualColumn.size}px`,
-                                    height: `${virtualRow.size}px`,
-                                    transform: `translateX(${virtualColumn.start}px) translateY(${virtualRow.start}px)`,
-                                  }}
-                                />
-                              );
-                            })}
-                          </React.Fragment>
-                        ))}
+                  <CardContent className="overflow-hidden flex flex-col">
+                    {isTokenizing ? (
+                      <div className="flex items-center justify-center flex-1 h-full min-h-[200px]">
+                        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                       </div>
-                    </div>
+                    ) : (
+                      <div
+                        ref={parentRef}
+                        className="p-2 rounded-lg bg-muted/30 max-h-[200px] overflow-auto"
+                      >
+                        <div
+                          style={{
+                            height: `${rowVirtualizer.getTotalSize()}px`,
+                            width: `${columnVirtualizer.getTotalSize()}px`,
+                            position: "relative",
+                          }}
+                        >
+                          {rowVirtualizer.getVirtualItems().map((virtualRow) => (
+                            <React.Fragment key={virtualRow.key}>
+                              {columnVirtualizer.getVirtualItems().map((virtualColumn) => {
+                                const index = virtualRow.index * gridColumns + virtualColumn.index;
+                                const token = tokens[index];
+    
+                                if (!token) return null;
+    
+                                return (
+                                  <TokenCell
+                                    key={`${virtualRow.key}-${virtualColumn.key}`}
+                                    token={token}
+                                    isSelected={selectedToken?.id === token.id}
+                                    onClick={setSelectedToken}
+                                    style={{
+                                      position: "absolute",
+                                      top: 0,
+                                      left: 0,
+                                      width: `${virtualColumn.size}px`,
+                                      height: `${virtualRow.size}px`,
+                                      transform: `translateX(${virtualColumn.start}px) translateY(${virtualRow.start}px)`,
+                                    }}
+                                  />
+                                );
+                              })}
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
             {/* Selected Token Details */}
             {selectedToken && (
-              <Card className="border-2 border-primary/20">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Info className="w-5 h-5" />
-                    Token Details
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Tabs defaultValue="visual">
+              <Tabs defaultValue="visual">
+                <Card className="border border-white">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="flex items-center gap-2">
+                      <Info className="w-5 h-5" />
+                      Token Details
+                    </CardTitle>
                     <TabsList>
                       <TabsTrigger value="visual">Visual</TabsTrigger>
                       <TabsTrigger value="raw">Raw Data</TabsTrigger>
                     </TabsList>
+                  </CardHeader>
+                  <CardContent>
                     <TabsContent value="visual" className="space-y-4">
                       <div className="p-6 rounded-lg text-center" style={{ backgroundColor: selectedToken.color }}>
                         <span className="text-4xl font-mono" style={{ color: getTokenTextColor() }}>
                           {selectedToken.text === "\n" ? "\\n" : selectedToken.text}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
                         <div>
                           <Label>Token ID</Label>
                           <p className="text-2xl font-mono">{selectedToken.id}</p>
@@ -425,7 +411,7 @@ export function TokenVisualizer() {
                           <Label>Character Count</Label>
                           <p className="text-2xl font-mono">{selectedToken.text.length}</p>
                         </div>
-                        <div className="col-span-2">
+                        <div>
                           <Label>Unicode Code Points</Label>
                           <p className="text-sm font-mono text-muted-foreground">
                             {Array.from(selectedToken.text)
@@ -451,9 +437,9 @@ export function TokenVisualizer() {
                         </div>
                       </div>
                     </TabsContent>
-                  </Tabs>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </Tabs>
             )}
           </div>
         </div>
