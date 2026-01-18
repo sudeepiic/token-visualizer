@@ -8,8 +8,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getTokenColor, getTokenBorderColor } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { getTokenColor, getTokenBorderColor, getTokenTextColor } from "@/lib/utils";
 import { Copy, Trash2, Sparkles, Info, FileCode, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface TokenInfo {
   id: number;
@@ -19,11 +27,18 @@ interface TokenInfo {
 }
 
 const MODELS = [
-  { value: "gpt-4o", label: "GPT-4o" },
-  { value: "gpt-4", label: "GPT-4" },
-  { value: "gpt-3.5-turbo", label: "GPT-3.5-turbo" },
-  { value: "text-davinci-003", label: "Davinci-003 (r50k_base)" },
-  { value: "gpt2", label: "GPT-2" },
+  { value: "gpt-4o", label: "GPT-4o", encoding: "o200k_base" },
+  { value: "gpt-4o-mini", label: "GPT-4o Mini", encoding: "o200k_base" },
+  { value: "gpt-4-turbo", label: "GPT-4 Turbo", encoding: "cl100k_base" },
+  { value: "gpt-4", label: "GPT-4", encoding: "cl100k_base" },
+  { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo", encoding: "cl100k_base" },
+  { value: "gpt-3.5-turbo-16k", label: "GPT-3.5 Turbo 16K", encoding: "cl100k_base" },
+  { value: "text-davinci-003", label: "Davinci-003", encoding: "r50k_base" },
+  { value: "text-davinci-002", label: "Davinci-002", encoding: "r50k_base" },
+  { value: "code-davinci-002", label: "Code Davinci-002", encoding: "p50k_base" },
+  { value: "code-cushman-001", label: "Code Cushman-001", encoding: "p50k_base" },
+  { value: "davinci", label: "Davinci", encoding: "r50k_base" },
+  { value: "gpt2", label: "GPT-2", encoding: "gpt2" },
 ];
 
 const EXAMPLES = [
@@ -116,6 +131,15 @@ export function TokenVisualizer() {
     tokenizeText(encodingRef.current, text);
   }, [text, isReady]);
 
+  // Auto-select first token when tokens change
+  useEffect(() => {
+    if (tokens.length > 0) {
+      setSelectedToken(tokens[0]);
+    } else {
+      setSelectedToken(null);
+    }
+  }, [tokens]);
+
   const handleClear = () => {
     setText("");
     setTokens([]);
@@ -131,16 +155,18 @@ export function TokenVisualizer() {
   const handleCopyTokens = () => {
     const tokenText = tokens.map((t) => t.text).join("");
     navigator.clipboard.writeText(tokenText);
+    toast.success("Copied token text to clipboard");
   };
 
   const handleCopyTokenIds = () => {
     const tokenIds = tokens.map((t) => t.id).join(", ");
     navigator.clipboard.writeText(tokenIds);
+    toast.success("Copied token IDs to clipboard");
   };
 
   if (!isReady) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4 md:p-8 flex items-center justify-center">
+      <div className="min-h-screen bg-background p-4 md:p-8 flex items-center justify-center">
         <div className="text-center space-y-4">
           <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary" />
           <p className="text-lg text-muted-foreground">Loading tokenizer...</p>
@@ -150,17 +176,27 @@ export function TokenVisualizer() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4 md:p-8">
+    <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Token Visualizer
-          </h1>
-          <p className="text-muted-foreground text-lg">
-            Explore how text is tokenized by OpenAI&apos;s models
-          </p>
-          <Badge variant="outline" className="text-xs">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-primary">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M2 17L12 22L22 17" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M2 12L12 17L22 12" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="12" cy="12" r="2" fill="white"/>
+            </svg>
+          </div>
+          <div className="space-y-1">
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+              Token Visualizer
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Explore how text is tokenized by OpenAI&apos;s models
+            </p>
+          </div>
+          <Badge variant="outline" className="text-xs ml-auto">
             Encoding: {encodingName}
           </Badge>
         </div>
@@ -181,18 +217,18 @@ export function TokenVisualizer() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="model">Model</Label>
-                <select
-                  id="model"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {MODELS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+                <Select value={model} onValueChange={setModel}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MODELS.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -248,116 +284,119 @@ export function TokenVisualizer() {
           </Card>
 
           {/* Right Column - Tokens */}
-          {tokens.length > 0 && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileCode className="w-5 h-5" />
-                      Tokens
-                    </CardTitle>
-                    <CardDescription>
-                      Click on any token to see details
-                    </CardDescription>
+          <div className="space-y-6">
+            {tokens.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileCode className="w-5 h-5" />
+                        Tokens
+                      </CardTitle>
+                      <CardDescription>
+                        Click on any token to see details
+                      </CardDescription>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={handleCopyTokens} variant="outline" size="sm">
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copy Text
+                      </Button>
+                      <Button onClick={handleCopyTokenIds} variant="outline" size="sm">
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copy IDs
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button onClick={handleCopyTokens} variant="outline" size="sm">
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copy Text
-                    </Button>
-                    <Button onClick={handleCopyTokenIds} variant="outline" size="sm">
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copy IDs
-                    </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2 p-2 rounded-lg bg-muted/30 max-h-[100px] overflow-y-auto">
+                    {tokens.map((token, index) => (
+                      <button
+                        key={`${token.id}-${index}`}
+                        onClick={() => setSelectedToken(token)}
+                        className={`token-chip group ${selectedToken?.id === token.id ? 'ring-2 ring-ring' : ''}`}
+                        style={{
+                          backgroundColor: token.color,
+                          borderColor: token.borderColor,
+                          color: getTokenTextColor(),
+                        }}
+                        title={`ID: ${token.id}`}
+                      >
+                        <span className="token-id">{token.id}</span>
+                        <span className="token-content">
+                          {token.text === "\n" ? "\\n" : token.text}
+                        </span>
+                      </button>
+                    ))}
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2 p-4 rounded-lg bg-muted/30 min-h-[120px] max-h-[calc(100vh-300px)] overflow-y-auto">
-                  {tokens.map((token, index) => (
-                    <button
-                      key={`${token.id}-${index}`}
-                      onClick={() => setSelectedToken(token)}
-                      className="token-chip group"
-                      style={{
-                        backgroundColor: token.color,
-                        borderColor: token.borderColor,
-                      }}
-                      title={`ID: ${token.id}`}
-                    >
-                      <span className="token-id">{token.id}</span>
-                      <span className="token-content">
-                        {token.text === "\n" ? "\\n" : token.text}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+                </CardContent>
+              </Card>
+            )}
 
-        {/* Selected Token Details - Full Width */}
-        {selectedToken && (
-          <Card className="border-2 border-primary/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Info className="w-5 h-5" />
-                Token Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="visual">
-                <TabsList>
-                  <TabsTrigger value="visual">Visual</TabsTrigger>
-                  <TabsTrigger value="raw">Raw Data</TabsTrigger>
-                </TabsList>
-                <TabsContent value="visual" className="space-y-4">
-                  <div className="p-6 rounded-lg text-center" style={{ backgroundColor: selectedToken.color }}>
-                    <span className="text-4xl font-mono">
-                      {selectedToken.text === "\n" ? "\\n" : selectedToken.text}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Token ID</Label>
-                      <p className="text-2xl font-mono">{selectedToken.id}</p>
-                    </div>
-                    <div>
-                      <Label>Character Count</Label>
-                      <p className="text-2xl font-mono">{selectedToken.text.length}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <Label>Unicode Code Points</Label>
-                      <p className="text-sm font-mono text-muted-foreground">
-                        {Array.from(selectedToken.text)
-                          .map((c) => `U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`)
-                          .join(" ")}
-                      </p>
-                    </div>
-                  </div>
-                </TabsContent>
-                <TabsContent value="raw" className="space-y-4">
-                  <div className="space-y-2 font-mono text-sm">
-                    <div className="p-3 rounded bg-muted">
-                      <span className="text-muted-foreground">Text: </span>
-                      {JSON.stringify(selectedToken.text)}
-                    </div>
-                    <div className="p-3 rounded bg-muted">
-                      <span className="text-muted-foreground">ID: </span>
-                      {selectedToken.id}
-                    </div>
-                    <div className="p-3 rounded bg-muted">
-                      <span className="text-muted-foreground">Bytes: </span>
-                      {new TextEncoder().encode(selectedToken.text).join(" ")}
-                    </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        )}
+            {/* Selected Token Details */}
+            {selectedToken && (
+              <Card className="border-2 border-primary/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Info className="w-5 h-5" />
+                    Token Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Tabs defaultValue="visual">
+                    <TabsList>
+                      <TabsTrigger value="visual">Visual</TabsTrigger>
+                      <TabsTrigger value="raw">Raw Data</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="visual" className="space-y-4">
+                      <div className="p-6 rounded-lg text-center" style={{ backgroundColor: selectedToken.color }}>
+                        <span className="text-4xl font-mono" style={{ color: getTokenTextColor() }}>
+                          {selectedToken.text === "\n" ? "\\n" : selectedToken.text}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Token ID</Label>
+                          <p className="text-2xl font-mono">{selectedToken.id}</p>
+                        </div>
+                        <div>
+                          <Label>Character Count</Label>
+                          <p className="text-2xl font-mono">{selectedToken.text.length}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <Label>Unicode Code Points</Label>
+                          <p className="text-sm font-mono text-muted-foreground">
+                            {Array.from(selectedToken.text)
+                              .map((c) => `U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`)
+                              .join(" ")}
+                          </p>
+                        </div>
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="raw" className="space-y-4">
+                      <div className="space-y-2 font-mono text-sm">
+                        <div className="p-3 rounded bg-muted">
+                          <span className="text-muted-foreground">Text: </span>
+                          {JSON.stringify(selectedToken.text)}
+                        </div>
+                        <div className="p-3 rounded bg-muted">
+                          <span className="text-muted-foreground">ID: </span>
+                          {selectedToken.id}
+                        </div>
+                        <div className="p-3 rounded bg-muted">
+                          <span className="text-muted-foreground">Bytes: </span>
+                          {new TextEncoder().encode(selectedToken.text).join(" ")}
+                        </div>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
 
         {/* Info Card */}
         <Card>
