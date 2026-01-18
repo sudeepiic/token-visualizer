@@ -33,8 +33,6 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
-    "@types/react-dom": "^19.2.3",
-    "vite-plugin-top-level-await": "^1.6.0",
-    "vite-plugin-wasm": "^3.5.0"
+    "@types/react-dom": "^19.2.3"
   }
 }
