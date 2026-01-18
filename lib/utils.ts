@@ -32,3 +32,12 @@ export function getTokenTextColor(): string {
 export function getTokenBorderColor(index: number): string {
   return TOKEN_COLORS[index % TOKEN_COLORS.length].border;
 }
+
+export function formatNumber(num: number): string {
+  if (num < 1000) return num.toString();
+  
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(num);
+}

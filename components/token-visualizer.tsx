@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ModelSelector } from "@/components/model-selector";
-import { getTokenColor, getTokenBorderColor, getTokenTextColor } from "@/lib/utils";
+import { getTokenColor, getTokenBorderColor, getTokenTextColor, formatNumber } from "@/lib/utils";
 import { useDebounce } from "@/lib/hooks";
 import { Copy, Trash2, Sparkles, Info, FileCode, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -285,13 +285,13 @@ export function TokenVisualizer() {
                   <div className="flex flex-col gap-1">
                     <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Tokens</span>
                     <Badge variant="secondary" className="text-base px-3 py-1 justify-center">
-                      {tokenCount}
+                      {formatNumber(tokenCount)}
                     </Badge>
                   </div>
                   <div className="flex flex-col gap-1">
                     <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Characters</span>
                     <Badge variant="secondary" className="text-base px-3 py-1 justify-center">
-                      {charCount}
+                      {formatNumber(charCount)}
                     </Badge>
                   </div>
                   <div className="flex flex-col gap-1">
