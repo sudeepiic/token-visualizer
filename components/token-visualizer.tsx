@@ -35,6 +35,47 @@ const EXAMPLES = [
 const TOKEN_MIN_WIDTH = 80;
 const TOKEN_HEIGHT = 35;
 
+const TokenCell = React.memo(({ 
+  token, 
+  isSelected, 
+  onClick, 
+  style 
+}: { 
+  token: TokenInfo; 
+  isSelected: boolean; 
+  onClick: (token: TokenInfo) => void; 
+  style: React.CSSProperties;
+}) => (
+  <div
+    style={{
+      ...style,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "4px"
+    }}
+  >
+    <button
+      onClick={() => onClick(token)}
+      className={`token-chip group w-full h-full ${
+        isSelected ? "ring-2 ring-ring" : ""
+      }`}
+      style={{
+        backgroundColor: token.color,
+        borderColor: token.borderColor,
+        color: getTokenTextColor(),
+      }}
+      title={`ID: ${token.id}`}
+    >
+      <span className="token-id">{token.id}</span>
+      <span className="token-content">
+        {token.text === "\n" ? "\\n" : token.text}
+      </span>
+    </button>
+  </div>
+));
+TokenCell.displayName = "TokenCell";
+
 export function TokenVisualizer() {
   const [text, setText] = useState("Hello, world!");
   const debouncedText = useDebounce(text, 500);
@@ -298,8 +339,11 @@ export function TokenVisualizer() {
                               if (!token) return null;
   
                               return (
-                                <div
+                                <TokenCell
                                   key={`${virtualRow.key}-${virtualColumn.key}`}
+                                  token={token}
+                                  isSelected={selectedToken?.id === token.id}
+                                  onClick={setSelectedToken}
                                   style={{
                                     position: "absolute",
                                     top: 0,
@@ -307,30 +351,8 @@ export function TokenVisualizer() {
                                     width: `${virtualColumn.size}px`,
                                     height: `${virtualRow.size}px`,
                                     transform: `translateX(${virtualColumn.start}px) translateY(${virtualRow.start}px)`,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    padding: "4px"
                                   }}
-                                >
-                                  <button
-                                    onClick={() => setSelectedToken(token)}
-                                    className={`token-chip group w-full h-full ${
-                                      selectedToken?.id === token.id ? "ring-2 ring-ring" : ""
-                                    }`}
-                                    style={{
-                                      backgroundColor: token.color,
-                                      borderColor: token.borderColor,
-                                      color: getTokenTextColor(),
-                                    }}
-                                    title={`ID: ${token.id}`}
-                                  >
-                                    <span className="token-id">{token.id}</span>
-                                    <span className="token-content">
-                                      {token.text === "\n" ? "\\n" : token.text}
-                                    </span>
-                                  </button>
-                                </div>
+                                />
                               );
                             })}
                           </React.Fragment>
