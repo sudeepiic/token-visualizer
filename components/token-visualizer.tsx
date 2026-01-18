@@ -1,23 +1,22 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { encoding_for_model } from "@dqbd/tiktoken";
+import { pipeline, env } from "@xenova/transformers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ModelSelector, ALL_MODELS } from "@/components/model-selector";
 import { getTokenColor, getTokenBorderColor, getTokenTextColor } from "@/lib/utils";
-import { Copy, Trash2, Sparkles, Info, FileCode, Loader2 } from "lucide-react";
+import { Copy, Trash2, Sparkles, Info, FileCode, Loader2, Download } from "lucide-react";
 import { toast } from "sonner";
+
+// Configure transformers.js to not use local models
+env.allowLocalModels = false;
+env.allowRemoteModels = true;
 
 interface TokenInfo {
   id: number;
@@ -25,21 +24,6 @@ interface TokenInfo {
   color: string;
   borderColor: string;
 }
-
-const MODELS = [
-  { value: "gpt-4o", label: "GPT-4o", encoding: "o200k_base" },
-  { value: "gpt-4o-mini", label: "GPT-4o Mini", encoding: "o200k_base" },
-  { value: "gpt-4-turbo", label: "GPT-4 Turbo", encoding: "cl100k_base" },
-  { value: "gpt-4", label: "GPT-4", encoding: "cl100k_base" },
-  { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo", encoding: "cl100k_base" },
-  { value: "gpt-3.5-turbo-16k", label: "GPT-3.5 Turbo 16K", encoding: "cl100k_base" },
-  { value: "text-davinci-003", label: "Davinci-003", encoding: "r50k_base" },
-  { value: "text-davinci-002", label: "Davinci-002", encoding: "r50k_base" },
-  { value: "code-davinci-002", label: "Code Davinci-002", encoding: "p50k_base" },
-  { value: "code-cushman-001", label: "Code Cushman-001", encoding: "p50k_base" },
-  { value: "davinci", label: "Davinci", encoding: "r50k_base" },
-  { value: "gpt2", label: "GPT-2", encoding: "gpt2" },
-];
 
 const EXAMPLES = [
   "Hello, world! This is a token visualizer.",
@@ -59,44 +43,62 @@ export function TokenVisualizer() {
   const [charCount, setCharCount] = useState(0);
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
   const [encodingName, setEncodingName] = useState<string>("o200k_base");
-  const [isReady, setIsReady] = useState(false);
+  const [isReady, setIsReady] = useState(true);
+  const [isLoadingModel, setIsLoadingModel] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
-  // Use a ref to store the encoding instance to avoid closure issues
-  const encodingRef = useRef<ReturnType<typeof encoding_for_model> | null>(null);
+  // Refs for tokenizer instances
+  const tiktokenRef = useRef<ReturnType<typeof encoding_for_model> | null>(null);
+  const transformersTokenizerRef = useRef<any>(null);
 
-  // Initialize encoding when component mounts
-  useEffect(() => {
+  // Get current model info
+  const currentModel = ALL_MODELS.find((m) => m.value === model);
+  const usesTransformers = currentModel?.modelId !== undefined;
+  const providerName = currentModel?.provider || "OpenAI";
+
+  // Initialize tiktoken for OpenAI models
+  const initTiktoken = useCallback(() => {
+    if (tiktokenRef.current) {
+      tiktokenRef.current.free();
+    }
     const enc = encoding_for_model(model);
-    encodingRef.current = enc;
+    tiktokenRef.current = enc;
     setEncodingName(enc.name || model);
-    setIsReady(true);
-
-    return () => {
-      enc.free();
-      encodingRef.current = null;
-    };
-  }, []);
-
-  // Handle model change
-  useEffect(() => {
-    if (encodingRef.current) {
-      // Free old encoding
-      encodingRef.current.free();
-    }
-
-    // Create new encoding
-    const newEnc = encoding_for_model(model);
-    encodingRef.current = newEnc;
-    setEncodingName(newEnc.name || model);
-
-    // Re-tokenize with new encoding
-    if (text) {
-      tokenizeText(newEnc, text);
-    }
+    return enc;
   }, [model]);
 
-  // Separate tokenize function
-  const tokenizeText = (enc: ReturnType<typeof encoding_for_model>, inputText: string) => {
+  // Initialize transformers.js for non-OpenAI models
+  const initTransformers = useCallback(async () => {
+    setIsLoadingModel(true);
+    setDownloadProgress(0);
+
+    try {
+      const tokenizer = await pipeline("tokenization", currentModel!.modelId!, {
+        progress_callback: (progress: any) => {
+          if (progress.status === "downloading") {
+            setDownloadProgress(Math.round(progress.progress || 0));
+          } else if (progress.status === "done") {
+            setDownloadProgress(100);
+          }
+        },
+      });
+
+      transformersTokenizerRef.current = tokenizer;
+      setEncodingName(model.split("/").pop() || model);
+      setIsLoadingModel(false);
+      return tokenizer;
+    } catch (error) {
+      console.error("Failed to load tokenizer:", error);
+      toast.error("Failed to load tokenizer model");
+      setIsLoadingModel(false);
+      return null;
+    }
+  }, [model, currentModel]);
+
+  // Tokenize with tiktoken
+  const tokenizeWithTiktoken = useCallback((inputText: string) => {
+    const enc = tiktokenRef.current || initTiktoken();
+
     if (!inputText) {
       setTokens([]);
       setTokenCount(0);
@@ -123,13 +125,100 @@ export function TokenVisualizer() {
     setTokens(newTokens);
     setTokenCount(tokenIds.length);
     setCharCount(inputText.length);
-  };
+  }, [initTiktoken]);
+
+  // Tokenize with transformers.js
+  const tokenizeWithTransformers = useCallback(async (inputText: string) => {
+    const tokenizer = transformersTokenizerRef.current || await initTransformers();
+
+    if (!tokenizer || !inputText) {
+      setTokens([]);
+      setTokenCount(0);
+      setCharCount(0);
+      return;
+    }
+
+    try {
+      const output = await tokenizer(inputText);
+      const tokenIds = output.input_ids.slice(1); // Remove special token at start
+      const tokens_text = output.tokens.slice(1); // Remove special token at start
+
+      const newTokens: TokenInfo[] = tokens_text.map((text: string, i: number) => ({
+        id: tokenIds[i],
+        text: text.replace(/▁/g, " "), // Replace sentencepiece space token
+        color: getTokenColor(i),
+        borderColor: getTokenBorderColor(i),
+      }));
+
+      setTokens(newTokens);
+      setTokenCount(tokenIds.length);
+      setCharCount(inputText.length);
+    } catch (error) {
+      console.error("Tokenization error:", error);
+      toast.error("Failed to tokenize text");
+    }
+  }, [initTransformers]);
+
+  // Handle model change
+  useEffect(() => {
+    setTokens([]);
+    setSelectedToken(null);
+    setDownloadProgress(0);
+
+    if (usesTransformers) {
+      // Free tiktoken if it exists
+      if (tiktokenRef.current) {
+        tiktokenRef.current.free();
+        tiktokenRef.current = null;
+      }
+      // Load transformers model
+      initTransformers().then(() => {
+        if (text) {
+          tokenizeWithTransformers(text);
+        }
+      });
+    } else {
+      // Free transformers tokenizer if it exists
+      transformersTokenizerRef.current = null;
+      // Use tiktoken
+      const enc = initTiktoken();
+      if (text) {
+        const tokenIds = enc.encode(text);
+        const newTokens: TokenInfo[] = [];
+        for (let i = 0; i < tokenIds.length; i++) {
+          const id = tokenIds[i];
+          const decodedBytes = enc.decode_single_token_bytes(id);
+          const decodedText = new TextDecoder("utf-8").decode(decodedBytes);
+          newTokens.push({
+            id,
+            text: decodedText,
+            color: getTokenColor(i),
+            borderColor: getTokenBorderColor(i),
+          });
+        }
+        setTokens(newTokens);
+        setTokenCount(tokenIds.length);
+        setCharCount(text.length);
+      }
+    }
+  }, [model, usesTransformers, initTiktoken, initTransformers, tokenizeWithTransformers]);
 
   // Handle text change
   useEffect(() => {
-    if (!isReady || !encodingRef.current) return;
-    tokenizeText(encodingRef.current, text);
-  }, [text, isReady]);
+    if (!isReady || isLoadingModel) return;
+
+    if (usesTransformers) {
+      if (text) {
+        tokenizeWithTransformers(text);
+      } else {
+        setTokens([]);
+        setTokenCount(0);
+        setCharCount(0);
+      }
+    } else {
+      tokenizeWithTiktoken(text);
+    }
+  }, [text, isReady, isLoadingModel, usesTransformers, tokenizeWithTiktoken, tokenizeWithTransformers]);
 
   // Auto-select first token when tokens change
   useEffect(() => {
@@ -164,12 +253,22 @@ export function TokenVisualizer() {
     toast.success("Copied token IDs to clipboard");
   };
 
-  if (!isReady) {
+  if (isLoadingModel) {
     return (
       <div className="min-h-screen bg-background p-4 md:p-8 flex items-center justify-center">
         <div className="text-center space-y-4">
           <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary" />
-          <p className="text-lg text-muted-foreground">Loading tokenizer...</p>
+          <p className="text-lg text-muted-foreground">
+            {downloadProgress > 0 ? `Downloading tokenizer model... ${downloadProgress}%` : "Loading tokenizer..."}
+          </p>
+          {downloadProgress > 0 && (
+            <div className="w-64 h-2 bg-muted rounded-full overflow-hidden mx-auto">
+              <div
+                className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${downloadProgress}%` }}
+              />
+            </div>
+          )}
         </div>
       </div>
     );
@@ -182,9 +281,9 @@ export function TokenVisualizer() {
         <div className="flex items-center gap-4">
           <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-primary">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M2 17L12 22L22 17" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M2 12L12 17L22 12" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 17L12 22L22 17" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 12L12 17L22 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               <circle cx="12" cy="12" r="2" fill="white"/>
             </svg>
           </div>
@@ -193,11 +292,11 @@ export function TokenVisualizer() {
               Token Visualizer
             </h1>
             <p className="text-sm text-muted-foreground">
-              Explore how text is tokenized by OpenAI&apos;s models
+              Compare how different LLM tokenizers process text
             </p>
           </div>
           <Badge variant="outline" className="text-xs ml-auto">
-            Encoding: {encodingName}
+            {encodingName}
           </Badge>
         </div>
 
@@ -217,18 +316,13 @@ export function TokenVisualizer() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="model">Model</Label>
-                <Select value={model} onValueChange={setModel}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MODELS.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ModelSelector value={model} onChange={setModel} isLoading={isLoadingModel} />
+                {usesTransformers && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Download className="w-3 h-3" />
+                    First load downloads the tokenizer model (~10-50MB)
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -239,11 +333,12 @@ export function TokenVisualizer() {
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   className="min-h-[120px] font-mono"
+                  disabled={isLoadingModel}
                 />
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <Button onClick={handleClear} variant="outline" size="sm">
+                <Button onClick={handleClear} variant="outline" size="sm" disabled={isLoadingModel}>
                   <Trash2 className="w-4 h-4 mr-2" />
                   Clear
                 </Button>
@@ -253,6 +348,7 @@ export function TokenVisualizer() {
                     onClick={() => handleExample(example)}
                     variant="ghost"
                     size="sm"
+                    disabled={isLoadingModel}
                   >
                     Example {index + 1}
                   </Button>
@@ -409,9 +505,12 @@ export function TokenVisualizer() {
               Different models use different tokenization strategies.
             </p>
             <p>
-              <strong>Byte Pair Encoding (BPE)</strong> is the algorithm used by tiktoken.
-              It breaks text into subword units, balancing between character-level and
-              word-level tokenization.
+              <strong>Byte Pair Encoding (BPE)</strong> is the algorithm used by tiktoken and many modern tokenizers.
+              It breaks text into subword units, balancing between character-level and word-level tokenization.
+            </p>
+            <p>
+              <strong>SentencePiece</strong> is used by Llama, Mistral, and other open-source models.
+              It treats whitespace as a special character (▁) instead of prefix.
             </p>
             <p>
               <strong>Why it matters:</strong> API costs are calculated per token, and models
